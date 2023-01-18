@@ -1,0 +1,34 @@
+# Local work folder that is not checked in
+_LOCAL/
+
+# OSX
+.DS_Store
+
+# Eclipse
+/.project
+/.settings/
+**/.*.md.html
+
+# IntelliJ
+/.idea
+/*.iml
+/*.ipr
+/*.iws
+
+# Visual Studio Code
+/.vscode
+
+# Vim
+*.swo
+*.swp
+
+# patch
+*.orig
+*.rej
+
+# Temp files
+*.tmp
+*.bak
+/dump
+/target
+/tools/dump

@@ -1,0 +1,11 @@
+extraParams.hxml
+-cp src
+-cp test
+-main hx.sshclient.TestRunner
+-lib haxe-concurrent
+-lib haxe-doctest
+-lib haxe-files
+-lib haxe-strings
+-dce full
+-debug
+-D dump=pretty

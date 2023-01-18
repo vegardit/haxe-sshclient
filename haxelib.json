@@ -1,0 +1,20 @@
+{
+   "name": "haxe-sshclient",
+   "url": "https://github.com/vegardit/haxe-sshclient",
+   "license": "Apache",
+   "classPath": "src/",
+   "tags": [
+      "ssh",
+      "cpp","cs","hashlink","hl","java","neko","python",
+      "vegardit"
+   ],
+   "description": "A basic SSH client library using an installed OpenSSH, Putty, or Kitty under the hood.",
+   "contributors": ["vegardit"],
+   "releasenote": "See https://github.com/vegardit/haxe-sshclient/blob/master/CHANGELOG.md",
+   "version": "0.1.0",
+   "dependencies": {
+      "haxe-concurrent" :"",
+      "haxe-files":"",
+      "haxe-strings":""
+   }
+}

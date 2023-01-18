@@ -1,0 +1,2 @@
+--macro hx.sshclient.internal.Macros.addDefines()
+--macro hx.sshclient.internal.Macros.configureNullSafety()
