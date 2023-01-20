@@ -54,7 +54,7 @@ class TestRunner extends DocTestRunner {
       assertEquals(sshClient.hostKeyChecking, PuttySSHHostKeyChecking.AcceptNewTemporary);
 
       final p = sshClient.execute("whoami");
-      p.awaitSuccess(5000);
+      assertTrue(p.awaitSuccess(5000));
 
       assertEquals(p.stdout.readAll().trim(), sshClient.username);
    }
@@ -91,7 +91,7 @@ class TestRunner extends DocTestRunner {
       assertEquals(sshClient.hostKeyChecking, PuttySSHHostKeyChecking.AcceptNew);
 
       final p = sshClient.execute("whoami");
-      p.awaitSuccess(5000);
+      assertTrue(p.awaitSuccess(5000));
 
       assertEquals(p.stdout.readAll().trim(), sshClient.username);
    }
@@ -142,7 +142,7 @@ class TestRunner extends DocTestRunner {
 
       trace(sshClient);
       final p = sshClient.execute("whoami");
-      p.awaitSuccess(5000);
+      assertTrue(p.awaitSuccess(5000));
 
       assertEquals(p.stdout.readAll().trim(), sshClient.username);
    }
