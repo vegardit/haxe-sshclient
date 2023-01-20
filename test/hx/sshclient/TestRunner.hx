@@ -65,7 +65,7 @@ class TestRunner extends DocTestRunner {
          .withHostname(getEnv("TEST_SSH_HOST"))
          .withUsername(getEnv("TEST_SSH_USER"))
          .withPort(getEnvInt("TEST_SSH_PORT"))
-         .withSecret(IdentityFile(File.of(getEnv("TEST_SSH_KEY_PPK"))))
+         .withSecret(IdentityFile(File.of(getEnv("TEST_SSH_PPKKEY_FILE"))))
          .withAgentForwarding(true)
          .withCompression(true)
 
@@ -84,7 +84,7 @@ class TestRunner extends DocTestRunner {
                case b(file): file.toString();
                case c(string): string;
             };
-      }, "IdentityFile:" + File.of(getEnv("TEST_SSH_KEY_PPK")));
+      }, "IdentityFile:" + File.of(getEnv("TEST_SSH_PPKKEY_FILE")));
       assertEquals(sshClient.agentForwarding, true);
 
       assertEquals(sshClient.compression, true);
@@ -117,7 +117,7 @@ class TestRunner extends DocTestRunner {
          .withHostname(getEnv("TEST_SSH_HOST"))
          .withUsername(getEnv("TEST_SSH_USER"))
          .withPort(getEnvInt("TEST_SSH_PORT"))
-         .withSecret(IdentityFile(File.of(getEnv("TEST_SSH_KEY_FILE"))))
+         .withSecret(IdentityFile(File.of(getEnv("TEST_SSH_PEMKEY_FILE"))))
          .withAgentForwarding(true)
          .withCompression(true)
 
@@ -134,7 +134,7 @@ class TestRunner extends DocTestRunner {
                case b(file): file.toString();
                case c(string): string;
             };
-      }, "IdentityFile:" + File.of(getEnv("TEST_SSH_KEY_FILE")));
+      }, "IdentityFile:" + File.of(getEnv("TEST_SSH_PEMKEY_FILE")));
       assertEquals(sshClient.agentForwarding, true);
 
       assertEquals(sshClient.compression, true);

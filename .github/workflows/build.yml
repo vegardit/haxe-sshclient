@@ -26,12 +26,14 @@ env:
   HOMEBREW_NO_INSTALL_CLEANUP: 1
   HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
 
+  # these env variables are also used by TestRunner.hx
   TEST_SSH_HOST: 127.0.0.1
-  TEST_SSH_USER: testuser
   TEST_SSH_PORT: 2222
+  TEST_SSH_USER: testuser
   TEST_SSH_PW: MySuperPW123
-  TEST_SSH_KEY_FILE: test/id_key.txt
-  TEST_SSH_KEY_PPK: test/id_key.ppk
+  TEST_SSH_PEMKEY_FILE: test/id_key.txt
+  TEST_SSH_PPKKEY_FILE: test/id_key.ppk
+  TEST_SSH_PUBKEY_FILE: test/id_pub.txt
 
 jobs:
   build:
@@ -42,6 +44,7 @@ jobs:
         os: 
         - ubuntu-latest
         - macos-latest
+        - windows-latest
         haxe:
         - 4.2.5
 
@@ -100,16 +103,102 @@ jobs:
       with:
         python-version: "3.10"
 
+    - name: 'MacOS: Load Homebrew Docker cache'
+      # https://github.com/docker-practice/actions-setup-docker/issues/21
+      uses: actions/cache@v3
+      if: runner.os == 'macOS'
+      with:
+        path: |
+          ~/Library/Caches/Homebrew/downloads/*--Docker.dmg
+        key: brew-actions-setup-docker-1.0.11
+        restore-keys: brew-actions-setup-docker-
+
+    - name: "MacOS: Install docker"
+      if: runner.os == 'macOS'
+      uses: docker-practice/actions-setup-docker@master
+      timeout-minutes: 12
+
     - name: "Install: Putty plink"
       run: |
         set -eu
 
         case "${{runner.os}}" in
-          macOS) brew install putty ;;
-          Linux) sudo apt-get install -y putty-tools ;;
+          macOS) brew install putty; plink -V ;;
+          Linux) sudo apt-get install -y putty-tools; plink -V ;;
+          Windows)
+            mkdir /tmp/kitty
+            curl -sSfL https://www.9bis.net/kitty/files/klink.exe -o /tmp/kitty/klink.exe
+            echo "$(cygpath -wa /tmp/kitty)" >> $GITHUB_PATH
+            /tmp/kitty/klink -V
+            ;;
         esac
 
-        plink -V
+    - name: "Create Windows testuser for SSH"
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: net user /ADD "${{ env.TEST_SSH_USER }}" "${{ env.TEST_SSH_PW }}"
+
+    - name: "Start local test SSH server"
+      run: |
+        set -euxo pipefail
+
+        chmod 400 test/id_*
+
+        case "${{runner.os}}" in
+          Windows)
+            # prevents setgid: Invalid argument
+            mkpasswd -l | tee /etc/passwd
+            mkgroup -l > /etc/group
+
+            /usr/bin/ssh-keygen -A # generate host keys for sshd
+
+            cat <<EOF > /etc/ssh/sshd_config
+        ListenAddress ${{ env.TEST_SSH_HOST }}
+        Port ${{ env.TEST_SSH_PORT }}
+        PermitRootLogin no
+        StrictModes no
+        PubkeyAuthentication yes
+        IgnoreUserKnownHosts yes
+        PasswordAuthentication yes
+        PermitEmptyPasswords no
+        LogLevel DEBUG3
+        match User ${{ env.TEST_SSH_USER }}
+          AuthorizedKeysFile $(pwd)/${{ env.TEST_SSH_PUBKEY_FILE }}
+        EOF
+            /usr/bin/sshd -T # test config
+
+            # install PsExec to run sshd as SYSTEM without having to configure it as a system service
+            curl -sSfL -o PSTools.zip http://download.sysinternals.com/files/PSTools.zip
+            unzip PSTools.zip PsExec64.exe
+
+            # launch sshd in background as SYSTEM to prevent "/usr/bin/bash: Operation not permitted"
+            ./PsExec64 -accepteula -d -s "$(cygpath -w /usr/bin/sshd)" -E /tmp/sshd.log &
+            sleep 5
+
+            # TODO for some reason on GitHub Actions under Windows accepting new host keys doesn't work 
+            # when plink/klink is executed via the PuttySSHClient class, so for now we accept
+            # the key before the Windows tests run
+            klink -auto-store-sshkey \
+              -P ${{ env.TEST_SSH_PORT }} \
+              -pw ${{ env.TEST_SSH_PW }} \
+              ${{ env.TEST_SSH_USER }}@${{ env.TEST_SSH_HOST }} \
+              "whoami"
+            ;;
+
+          *)
+            touch /tmp/sshd.log
+            docker run -d --rm \
+              --name "openssh-server" \
+              -e PASSWORD_ACCESS=true \
+              -e USER_PASSWORD=MySuperPW123  \
+              -e USER_NAME=testuser  \
+              -e PUBLIC_KEY_FILE=/config/id_pub.txt  \
+              -p 2222:2222 \
+              --volume $(pwd)/${{ env.TEST_SSH_PUBKEY_FILE }}:/config/id_pub.txt:ro  \
+              --volume /tmp/sshd.log:/config/logs/openssh/current:rw \
+              lscr.io/linuxserver/openssh-server:latest
+            ;;
+        esac
 
     - name: "Install: Haxe ${{ matrix.haxe }}"
       uses: krdlab/setup-haxe@v1 # https://github.com/krdlab/setup-haxe
@@ -138,43 +227,9 @@ jobs:
 
         haxelib dev haxe-sshclient .
 
-        ls -l ${{ runner.tool_cache }}/haxe/${{ matrix.haxe }}/x64/lib
-        du  -s -h ${{ runner.tool_cache }}/haxe/${{ matrix.haxe }}/x64/lib/*
-
-    - name: 'MacOS: Load Homebrew Docker cache'
-      # https://github.com/docker-practice/actions-setup-docker/issues/21
-      uses: actions/cache@v3
-      if: runner.os == 'macOS'
-      with:
-        path: |
-          ~/Library/Caches/Homebrew/downloads/*--Docker.dmg
-        key: brew-actions-setup-docker-1.0.11
-        restore-keys: brew-actions-setup-docker-
-
-    - name: "MacOS: Install docker"
-      if: runner.os == 'macOS'
-      uses: docker-practice/actions-setup-docker@master
-      timeout-minutes: 12
-
-    - name: "Start local test SSH server"
-      run: |
-        docker run -d --rm \
-          --name "openssh-server" \
-          -e PASSWORD_ACCESS=true \
-          -e USER_PASSWORD=MySuperPW123  \
-          -e USER_NAME=testuser  \
-          -e PUBLIC_KEY_FILE=/config/id_pub.txt  \
-          -p 2222:2222 \
-          --volume $(pwd)/test/id_pub.txt:/config/id_pub.txt:ro  \
-          lscr.io/linuxserver/openssh-server:latest
-
-
     ##################################################
     # Tests
     ##################################################
-
-    - name: "Fix file permission of test ID key"
-      run: chmod 400 test/id_key.txt
 
     - name: Test [neko]
       run: haxelib run travix neko
@@ -202,6 +257,12 @@ jobs:
     - name: Test [cpp]
       run: haxelib run travix cpp
 
+    ##################################################
+    # Dipslay logs
+    ##################################################
+    - name: SSHD logs
+      if: always()
+      run: cat /tmp/sshd.log || true
 
   ###########################################################
   cleanup:
