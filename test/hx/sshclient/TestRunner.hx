@@ -24,7 +24,7 @@ class TestRunner extends DocTestRunner {
    }
 
 
-   function testPuttyWithPassword() {
+   function testPutty01WithPassword() {
       final sshClient = PuttySSHClient.builder()
          .withHostname(getEnv("TEST_SSH_HOST"))
          .withUsername(getEnv("TEST_SSH_USER"))
@@ -60,7 +60,7 @@ class TestRunner extends DocTestRunner {
    }
 
 
-   function testPuttyWithIdentityFile() {
+   function testPutty02WithIdentityFile() {
       final sshClient = PuttySSHClient.builder()
          .withHostname(getEnv("TEST_SSH_HOST"))
          .withUsername(getEnv("TEST_SSH_USER"))
