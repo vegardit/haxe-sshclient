@@ -7,8 +7,6 @@ package hx.sshclient;
 
 import hx.files.Path;
 import hx.files.File;
-import hx.sshclient.OpenSSHClient.locateOpenSSH;
-import hx.sshclient.PuttySSHClient.locatePutty;
 import hx.sshclient.internal.Either3;
 import hx.sshclient.internal.MiscUtils.lazyNonNull;
 import hx.concurrent.thread.BackgroundProcess;
