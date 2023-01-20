@@ -56,22 +56,20 @@ class OpenSSHClient extends SSHClient {
          username + "@" + hostname,
          "-p",
          port,
-         "-o",
-         "StrictHostKeyChecking=" + switch (hostKeyChecking) {
+         "-oBatchMode=yes",
+         "-oStrictHostKeyChecking=" + switch (hostKeyChecking) {
             case Strict: "yes";
             case AcceptNew: "accept-new";
             case Off: "no";
          },
-         "-o",
-         "UpdateHostKeys=yes",
          "-" + (agentForwarding ? "A" : "a")
       ];
       switch (secret) {
-         case AuthenticationAgent:
-         // nothing to do
+         case AuthenticationAgent: //
+            args.push("-oPasswordAuthentication=no");
          case IdentityFile(file):
-            args.push("-o");
-            args.push("IdentitiesOnly=yes");
+            args.push("-oPasswordAuthentication=no");
+            args.push("-oIdentitiesOnly=yes");
             args.push("-i");
             args.push(switch (file.value) {
                case a(path): path;
@@ -79,10 +77,9 @@ class OpenSSHClient extends SSHClient {
                case c(string): string;
             });
          case Password(_):
-            // args.push("-o");
-            // args.push("PreferredAuthentications=password");
-            // args.push("-o");
-            // args.push("PubkeyAuthentication=no");
+            // args.push("-oPasswordAuthentication=yes");
+            // args.push("-oPreferredAuthentications=password");
+            // args.push("-oPubkeyAuthentication=no");
             throw "Password authentication is not supported with OpenSSH!";
       }
       if (compression)
@@ -93,6 +90,12 @@ class OpenSSHClient extends SSHClient {
        * execute command via openssh
        */
       return new BackgroundProcess(executable.toString(), args);
+   }
+
+
+   override //
+   public function toString():String {
+      return 'OpenSSHClient[${username}@${hostname}:${port},Secret(${secret.getName()}),Exe($executable)]';
    }
 }
 
