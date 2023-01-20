@@ -134,12 +134,19 @@ class PuttySSHClient extends SSHClient {
             "The host key is not cached for this server",
             "The server's host key is not cached"
          ])) {
-            final errorMessage = p.stderr.readAll();
+            var errorMessage = p.stderr.readAll();
             if (errorMessage.contains("Store key in cache? (y/n")) {
+               errorMessage = errorMessage.substringBefore("If").trim().replaceAll(Strings.NEW_LINE, " ");
                p.stdin.writeString(switch (hostKeyChecking) {
-                  case AcceptNew: "y\n";
-                  case AcceptNewTemporary, Off: "n\n";
-                  default: throw errorMessage.substringBefore("If").trim();
+                  case AcceptNew:
+                     trace('INFO: $errorMessage');
+                     trace('INFO: Permanently accepting changed host key because of configured host key checking strategy [$hostKeyChecking]...');
+                     "y\n";
+                  case AcceptNewTemporary, Off:
+                     trace('INFO: $errorMessage');
+                     trace('INFO: Temporarily accepting changed host key because of configured host key checking strategy [$hostKeyChecking]...');
+                     "n\n";
+                  default: throw errorMessage;
                });
                p.stdin.flush();
             } else {
@@ -147,11 +154,15 @@ class PuttySSHClient extends SSHClient {
                throw 'Cannot connect to ${hostname}: ${errorMessage.trim()}';
             }
          } else if (stdErrLine.contains("WARNING - POTENTIAL SECURITY BREACH")) {
-            final errorMessage = p.stderr.readAll();
+            var errorMessage = p.stderr.readAll();
             if (errorMessage.contains("Update cached key? (y/n")) {
+               errorMessage = errorMessage.substringBefore("If").trim().replaceAll(Strings.NEW_LINE, " ");
                p.stdin.writeString(switch (hostKeyChecking) {
-                  case Off: "n\n";
-                  default: throw errorMessage.substringBefore("If").trim();
+                  case Off:
+                     trace('INFO: $errorMessage');
+                     trace('WARNING: Temporarily accepting changed host key because of configured host key checking strategy [$hostKeyChecking]...');
+                     "n\n";
+                  default: throw errorMessage;
                });
                p.stdin.flush();
             } else {
@@ -161,6 +172,12 @@ class PuttySSHClient extends SSHClient {
          }
       }
       return p;
+   }
+
+
+   override //
+   public function toString():String {
+      return 'PuttySSHClient[${username}@${hostname}:${port},Secret(${secret.getName()}),Exe($executable)]';
    }
 }
 
