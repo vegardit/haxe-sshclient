@@ -61,9 +61,15 @@ enum PuttySSHHostKeyChecking {
 @:allow(hx.sshclient.PuttySSHClientBuilder)
 class PuttySSHClient extends SSHClient {
 
+   inline static final OPT_AUTO_STORE_SSHKEY = "-auto-store-sshkey";
+
+
    public var executable(default, null):File = lazyNonNull();
    public var hostKeyChecking(default, null):PuttySSHHostKeyChecking = Strict;
    public var sessionName(default, null):Null<String> = null;
+
+
+   var supportsAutoStoreSSHKeyOption = false;
 
 
    function new() {
@@ -89,6 +95,10 @@ class PuttySSHClient extends SSHClient {
                   args.push("-hostkey");
                   args.push(acceptedHostKey);
                }
+            }
+         case AcceptNew:
+            if (supportsAutoStoreSSHKeyOption) {
+               args.push(OPT_AUTO_STORE_SSHKEY);
             }
          default:
       }
@@ -212,6 +222,19 @@ class PuttySSHClientBuilder extends SSHClientBuilder<PuttySSHClient, PuttySSHCli
          }
       } else if (!client.executable.path.isFile()) {
          throw 'Specified executable [${client.executable}] does not exist or is not a regular file!';
+      }
+
+      try {
+         final p = new sys.io.Process(client.executable.toString(), ["--help"]);
+         p.exitCode(); // await exit
+         while (true) {
+            if (p.stdout.readLine().contains(PuttySSHClient.OPT_AUTO_STORE_SSHKEY)) {
+               client.supportsAutoStoreSSHKeyOption = true;
+               break;
+            }
+         }
+      } catch (e) {
+         // ignore
       }
 
       this.clientBuilt = true;
