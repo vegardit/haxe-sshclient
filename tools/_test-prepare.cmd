@@ -28,7 +28,7 @@ shift
 
 REM install common libs
 echo Checking required haxelibs...
-for %%i in (haxe-doctest) do (
+for %%i in (haxe-doctest haxe-concurrent haxe-files haxe-strings) do (
    haxelib list | findstr %%i >NUL
    if errorlevel 1 (
       echo Installing [%%i]...
