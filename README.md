@@ -11,13 +11,13 @@
 1. [Using the latest code](#latest)
 1. [License](#license)
 
+
 ## <a name="what-is-it"></a>What is it?
 
 A [haxelib](http://lib.haxe.org/documentation/using-haxelib/) that provides a basic SSH client which uses a pre-installed
 [OpenSSH](https://www.openssh.com/), [Putty](https://www.chiark.greenend.org.uk/~sgtatham/putty/), or [Kitty](https://www.9bis.net/kitty/index.html) client under the hood.
 
 All classes are located in the package `hx.sshclient` or below.
-
 
 ### Requirements/Limitations
 
@@ -27,7 +27,8 @@ All classes are located in the package `hx.sshclient` or below.
 - One of the following SSH clients must be installed:
   - Linux/MacOS: OpenSSH (ssh), Putty (plink)
   - Windows: OpenSSH (ssh.exe), Putty (plink.exe), Kitty (klink.exe)
-- **Password-based authentication** is only supported using Putty/Kitty.
+- **Password-based authentication** is only supported when using Putty/Kitty.
+
 
 ## <a name="installation"></a>Installation
 
@@ -133,18 +134,6 @@ haxelib git haxe-sshclient https://github.com/vegardit/haxe-sshclient main D:\ha
     ```
 
 2. register the development release with Haxe
-    ```
-    haxelib dev haxe-sshclient D:\haxe-projects\haxe-sshclient
-    ```
-
-###  Using Subversion
-
-1. check-out the trunk
-    ```
-    svn checkout https://github.com/vegardit/haxe-sshclient/trunk D:\haxe-projects\haxe-sshclient
-    ```
-
-2. register the development release with haxe
     ```
     haxelib dev haxe-sshclient D:\haxe-projects\haxe-sshclient
     ```
