@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: © Vegard IT GmbH (https://vegardit.com) and contributors
+# SPDX-FileContributor: Sebastian Thomschke, Vegard IT GmbH
+# SPDX-License-Identifier: Apache-2.0
+#
 # https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions
 name: Build
 
@@ -10,22 +14,38 @@ on:
     paths-ignore:
     - '**/*.adoc'
     - '**/*.md'
+    - '.editorconfig'
+    - '.git*'
     - '.github/*.yml'
+    - 'tools'
   pull_request:
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
+    inputs:
+      debug-with-ssh:
+        description: "Start an SSH session for debugging purposes after tests ran:"
+        default: never
+        type: choice
+        options: [ always, on_failure, on_failure_or_cancelled, never ]
+      debug-with-ssh-only-for-actor:
+        description: "Limit access to the SSH session to the GitHub user that triggered the job."
+        default: true
+        type: boolean
+      debug-with-ssh-only-jobs-matching:
+        description: "Only start an SSH session for jobs matching this regex pattern:"
+        default: ".*"
+        type: string
+      test-target:
+        description: "If specified only the given target will be tested"
+        default: ""
+        type: choice
+        options: [ "", cpp, cs, eval, flash, hl, java, jvm, lua, neko, node, php, python ]
 
 defaults:
   run:
     shell: bash
 
 env:
-  # https://docs.brew.sh/Manpage#environment
-  HOMEBREW_NO_ANALYTICS: 1
-  HOMEBREW_NO_AUTO_UPDATE: 1
-  HOMEBREW_NO_INSTALL_CLEANUP: 1
-  HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
-
   # these env variables are also used by TestRunner.hx
   TEST_SSH_HOST: 127.0.0.1
   TEST_SSH_PORT: 2222
@@ -46,6 +66,7 @@ jobs:
         - macos-latest
         - windows-latest
         haxe:
+        - nightly
         - 4.2.5
 
     steps:
@@ -55,53 +76,12 @@ jobs:
     - name: Git Checkout
       uses: actions/checkout@v3 #https://github.com/actions/checkout
 
-    - name: "Cache: Haxelib Repository"
-      uses: actions/cache@v3
-      with:
-        path: ${{ runner.tool_cache }}/haxe/${{ matrix.haxe }}/x64/lib
-        # https://github.com/actions/cache/issues/342#issuecomment-673371329
-        key: ${{ runner.os }}-haxelib-${{ matrix.haxe }}-${{ github.run_id }}
-        restore-keys: |
-          ${{ runner.os }}-haxelib-${{ matrix.haxe }}-
 
-    - name: "Linux: Configure APT"
-      if: runner.os == 'Linux'
-      run: |
-        # Workaround to avoid sporadic connectivity issues "Could not connect to azure.archive.ubuntu.com:80"
-        # see https://github.com/actions/virtual-environments/issues/675
-        echo 'APT::Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/80-acquire-retries
-        if ! curl --max-time 3 --output /dev/null --silent --head --fail "http://azure.archive.ubuntu.com/ubuntu/dists/"; then
-          sudo sed -i 's/azure\.//' /etc/apt/sources.list
-        fi
-
-        # avoid potential 404 see https://github.com/actions/runner-images/issues/592
-        sudo apt-get update 
-
-    - name: "MacOS: Update brew formulas"
-      if: runner.os == 'macOS'
-      run: |
-        set -eu
-
-        echo "::group::brew update" && brew update && echo "::endgroup::"
-        echo "::group::brew config" && brew config && echo "::endgroup::"
-        echo "::group::brew list" && brew list --version && echo "::endgroup::"
-
-        # workaround to prevent "Error: The `brew link` step did not complete successfully" during "brew install mono"
-        # and setup-python action, see https://github.com/actions/setup-python/issues/577
-        rm -f \
-          /usr/local/share/man/man1/* \
-          /usr/local/share/man/man5/* \
-          /usr/local/bin/idle3 \
-          /usr/local/bin/2to3 \
-          /usr/local/bin/idle3 \
-          /usr/local/bin/pydoc3 \
-          /usr/local/bin/python3 \
-          /usr/local/bin/python3-config
-
-    - name: "Install: Python 3"
-      uses: actions/setup-python@v4 # https://github.com/actions/setup-python
-      with:
-        python-version: "3.10"
+    ##################################################
+    # Install software
+    ##################################################
+    - name: "Linux: Configure fast APT mirror"
+      uses: vegardit/fast-apt-mirror.sh@v1
 
     - name: 'MacOS: Load Homebrew Docker cache'
       # https://github.com/docker-practice/actions-setup-docker/issues/21
@@ -109,14 +89,13 @@ jobs:
       if: runner.os == 'macOS'
       with:
         path: |
-          ~/Library/Caches/Homebrew/downloads/*--Docker.dmg
-        key: brew-actions-setup-docker-1.0.11
-        restore-keys: brew-actions-setup-docker-
+          ~/Library/Caches/Homebrew/downloads/*-Docker.dmg
+        key: brew-actions-setup-docker
 
     - name: "MacOS: Install docker"
       if: runner.os == 'macOS'
       uses: docker-practice/actions-setup-docker@master
-      timeout-minutes: 12
+      timeout-minutes: 15
 
     - name: "Install: Putty plink"
       run: |
@@ -133,10 +112,14 @@ jobs:
             ;;
         esac
 
+
+    ##################################################
+    # Run local SSH server
+    ##################################################
     - name: "Create Windows testuser for SSH"
       if: runner.os == 'Windows'
       shell: cmd
-      run: net user /ADD "${{ env.TEST_SSH_USER }}" "${{ env.TEST_SSH_PW }}"
+      run: net user /ADD ${{ env.TEST_SSH_USER }} ${{ env.TEST_SSH_PW }}
 
     - name: "Start local test SSH server"
       run: |
@@ -144,17 +127,17 @@ jobs:
 
         chmod 400 test/id_*
 
-        case "${{runner.os}}" in
+        case "${{ runner.os }}" in
           Windows)
             # prevents setgid: Invalid argument
             mkpasswd -l | tee /etc/passwd
             mkgroup -l > /etc/group
 
-            /usr/bin/ssh-keygen -A # generate host keys for sshd
+            /usr/bin/ssh-keygen -vA # generate host keys for sshd
 
             cat <<EOF > /etc/ssh/sshd_config
-        ListenAddress ${{ env.TEST_SSH_HOST }}
-        Port ${{ env.TEST_SSH_PORT }}
+        ListenAddress $TEST_SSH_HOST
+        Port $TEST_SSH_PORT
         PermitRootLogin no
         StrictModes no
         PubkeyAuthentication yes
@@ -162,8 +145,8 @@ jobs:
         PasswordAuthentication yes
         PermitEmptyPasswords no
         LogLevel DEBUG3
-        match User ${{ env.TEST_SSH_USER }}
-          AuthorizedKeysFile $(pwd)/${{ env.TEST_SSH_PUBKEY_FILE }}
+        match User $TEST_SSH_USER
+          AuthorizedKeysFile $(pwd)/$TEST_SSH_PUBKEY_FILE
         EOF
             /usr/bin/sshd -T # test config
 
@@ -179,9 +162,9 @@ jobs:
             # when plink/klink is executed via the PuttySSHClient class, so for now we accept
             # the key before the Windows tests run
             klink -auto-store-sshkey \
-              -P ${{ env.TEST_SSH_PORT }} \
-              -pw ${{ env.TEST_SSH_PW }} \
-              ${{ env.TEST_SSH_USER }}@${{ env.TEST_SSH_HOST }} \
+              -P $TEST_SSH_PORT \
+              -pw $TEST_SSH_PW \
+              $TEST_SSH_USER@$TEST_SSH_HOST \
               "whoami"
             ;;
 
@@ -190,90 +173,49 @@ jobs:
             docker run -d --rm \
               --name "openssh-server" \
               -e PASSWORD_ACCESS=true \
-              -e USER_PASSWORD=MySuperPW123  \
-              -e USER_NAME=testuser  \
-              -e PUBLIC_KEY_FILE=/config/id_pub.txt  \
-              -p 2222:2222 \
-              --volume $(pwd)/${{ env.TEST_SSH_PUBKEY_FILE }}:/config/id_pub.txt:ro  \
+              -e USER_NAME=$TEST_SSH_USER \
+              -e USER_PASSWORD=$TEST_SSH_PW \
+              -e PUBLIC_KEY_FILE=/config/id_pub.txt \
+              -p $TEST_SSH_PORT:2222 \
+              --volume $(pwd)/$TEST_SSH_PUBKEY_FILE:/config/id_pub.txt:ro \
               --volume /tmp/sshd.log:/config/logs/openssh/current:rw \
               lscr.io/linuxserver/openssh-server:latest
             ;;
         esac
 
-    - name: "Install: Haxe ${{ matrix.haxe }}"
-      uses: krdlab/setup-haxe@v1 # https://github.com/krdlab/setup-haxe
+
+    ##################################################
+    # Run Haxe Tests
+    ##################################################
+    - name: Test with Haxe
+      uses: vegardit/haxe-reusable-workflows/.github/actions/test-with-haxe@v1
       with:
         haxe-version: ${{ matrix.haxe }}
+        haxe-libs: haxe-concurrent haxe-doctest haxe-files haxe-strings hx3compat
 
-    - name: "Install: Haxe Libraries"
-      run: |
-        set -eu
+        # Haxe targets to test with, by default all are set to false:
+        test-cpp:    true
+        test-cs:     true
+        test-hl:     true
+        test-java:   true
+        test-jvm:    true
+        test-neko:   true
+        test-python: true
 
-        haxelib config
+        # provide SSH access to the GitHub runner for manual debugging purposes
+        debug-with-ssh: ${{ inputs.debug-with-ssh || 'never' }}
+        debug-with-ssh-only-for-actor: ${{ inputs.debug-with-ssh-only-for-actor || false }}
+        debug-with-ssh-only-jobs-matching: ${{ inputs.debug-with-ssh-only-jobs-matching }}
 
-        for lib in haxe-concurrent haxe-doctest haxe-files haxe-strings hx3compat; do
-          echo "::group::install_$lib"
-          haxelib install $lib
-          haxelib --always update $lib || true
-          echo "::endgroup::"
-        done
-
-        # install latest travix version
-        haxelib git travix https://github.com/back2dos/travix
-        pushd .
-        cd $(haxelib config)travix/git
-        haxe build-neko.hxml -lib hx3compat
-        popd
-
-        haxelib dev haxe-sshclient .
-
-    ##################################################
-    # Tests
-    ##################################################
-
-    - name: Test [neko]
-      run: haxelib run travix neko
-
-    - name: Test [hl]
-      if: runner.os != 'Linux' # prebuild linux binary available yet
-      run: haxelib run travix hl
-
-    - name: Test [java]
-      run: |
-        java -version
-        haxelib run travix java
-
-    - name: Test [jvm]
-      run: haxelib run travix java -D jvm
-
-    - name: Test [python]
-      run: |
-        python --version
-        haxelib run travix python
-
-    - name: Test [cs]
-      run: haxelib run travix cs
-
-    - name: Test [cpp]
-      run: haxelib run travix cpp
 
     ##################################################
     # Dipslay logs
     ##################################################
-    - name: SSHD logs
+    - name: Shutdown SSHD and display logs
       if: always()
-      run: cat /tmp/sshd.log || true
-
-  ###########################################################
-  cleanup:
-  ###########################################################
-    runs-on: ubuntu-latest
-    needs: 
-      - build
-
-    steps:
-    - name: "Delete intermediate build artifacts"
-      uses: geekyeggo/delete-artifact@v2 # https://github.com/GeekyEggo/delete-artifact/
-      with:
-        name: "*"
-        failOnError: false
+      run: |
+        case "${{runner.os}}" in
+          Windows) ;;
+          *)       docker container rm openssh-server --force || true ;;
+        esac
+        cat /tmp/sshd.log || true
