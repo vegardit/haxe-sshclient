@@ -37,8 +37,8 @@
 			"afterStaticVars": 2,
 			"afterVars": 2,
 			"beginType": 1,
-			"betweenFunctions": 2,
-			"betweenStaticFunctions": 2,
+			"betweenFunctions": 1,
+			"betweenStaticFunctions": 1,
 			"existingBetweenFields": "remove"
 		},
 		"beforeDocCommentEmptyLines": "ignore",
@@ -55,7 +55,7 @@
 		"emptyCurly": "break"
 	},
 	"sameLine": {
-		"caseBody": "same",
+		"caseBody": "keep",
 		"ifBody": "keep"
 	},
 	"wrapping": {

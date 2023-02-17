@@ -14,7 +14,7 @@
 
 ## <a name="what-is-it"></a>What is it?
 
-A [haxelib](http://lib.haxe.org/documentation/using-haxelib/) that provides a basic SSH client which uses a pre-installed
+A [haxelib](http://lib.haxe.org/documentation/using-haxelib/) that provides a basic SSH client to execute commands on remote system. It uses a pre-installed
 [OpenSSH](https://www.openssh.com/), [Putty](https://www.chiark.greenend.org.uk/~sgtatham/putty/), or [Kitty](https://www.9bis.net/kitty/index.html) client under the hood.
 
 All classes are located in the package `hx.sshclient` or below.
@@ -24,9 +24,9 @@ All classes are located in the package `hx.sshclient` or below.
 - **Haxe Version:** 4.2.0 or higher
 - **Supported Targets:** C++, C#, Neko, HashLink, Java/JVM, Python
 - **Supported Operating Systems:** Linux, MacOS, Windows
-- One of the following SSH clients must be installed:
-  - Linux/MacOS: OpenSSH (ssh), Putty (plink)
-  - Windows: OpenSSH (ssh.exe), Putty (plink.exe), Kitty (klink.exe)
+- **Preinstalled software:** one of the following SSH clients must be installed:
+  - Linux/MacOS: OpenSSH (ssh), [Putty](https://www.chiark.greenend.org.uk/~sgtatham/putty/) (plink)
+  - Windows: OpenSSH (ssh.exe), [Putty](https://www.chiark.greenend.org.uk/~sgtatham/putty/) (plink.exe), [Kitty](https://www.9bis.net/kitty/index.html) (klink.exe)
 - **Password-based authentication** is only supported when using Putty/Kitty.
 
 
@@ -40,12 +40,12 @@ All classes are located in the package `hx.sshclient` or below.
      - Putty client: download **plink.exe** from https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html
      - Kitty client: download **klink.exe** from https://www.9bis.net/kitty/index.html#!pages/download.md
 
-1. install the library via haxelib using the command:
+1. Install the library via haxelib using the command:
     ```
     haxelib install haxe-sshclient
     ```
 
-1. use in your Haxe project
+1. Use the library in your Haxe project:
 
    - for [OpenFL](http://www.openfl.org/)/[Lime](https://github.com/openfl/lime) projects add `<haxelib name="haxe-sshclient" />` to your [project.xml](http://www.openfl.org/documentation/projects/project-files/xml-format/)
    - for free-style projects add `-lib haxe-sshclient`  to `your *.hxml` file or as command line option when running the [Haxe compiler](http://haxe.org/manual/compiler-usage.html)
@@ -60,7 +60,8 @@ The following code creates an SSH client backed by Putty/Kitty with default sett
 - uses HostKeyChecking strategy `Strict`, i.e. only connects to hosts that are already known
 - connects to port 22
 ```haxe
-import hx.sshclient.PuttySSHClient
+import hx.sshclient.PuttySSHClient;
+//...
 var sshClient = PuttySSHClient.builder()
    .withHostname("myhost")
    .withUsername("myuser")
@@ -70,7 +71,8 @@ var sshClient = PuttySSHClient.builder()
 
 The SSH client can be further configured:
 ```haxe
-import hx.sshclient.PuttySSHClient
+import hx.sshclient.PuttySSHClient;
+//...
 var sshClient = PuttySSHClient.builder()
    .withHostname("myhost")
    .withPort(2222) // use a different port
@@ -87,7 +89,8 @@ The following code creates an SSH client backed by OpenSSH with default settings
 - uses HostKeyChecking strategy `Strict`, i.e. only connects to hosts that are already known
 - connects to port 22
 ```haxe
-import hx.sshclient.OpenSSHClient
+import hx.sshclient.OpenSSHClient;
+//...
 var sshClient = OpenSSHClient.builder()
    .withHostname("myhost")
    .withUsername("myuser")
@@ -97,7 +100,8 @@ var sshClient = OpenSSHClient.builder()
 
 The SSH client can be further configured:
 ```haxe
-import hx.sshclient.OpenSSHClient
+import hx.sshclient.OpenSSHClient;
+//...
 var sshClient = PuttySSHClient.builder()
    .withHostname("myhost")
    .withPort(2222) // use a different port
@@ -122,19 +126,19 @@ trace('result: ${output}');
 
 ### Using `haxelib git`
 
-```
+```batch
 haxelib git haxe-sshclient https://github.com/vegardit/haxe-sshclient main D:\haxe-projects\haxe-sshclient
 ```
 
 ###  Using Git
 
 1. check-out the main branch
-    ```
+    ```batch
     git clone https://github.com/vegardit/haxe-sshclient --branch main --single-branch D:\haxe-projects\haxe-sshclient
     ```
 
 2. register the development release with Haxe
-    ```
+    ```batch
     haxelib dev haxe-sshclient D:\haxe-projects\haxe-sshclient
     ```
 
