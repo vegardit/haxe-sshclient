@@ -128,10 +128,10 @@ class PuttySSHClient extends SSHClient {
       /*
        * execute command via putty
        */
-      final p = new BackgroundProcess(executable.toString(), args);
+      final p = BackgroundProcess.create(executable.toString(), args);
       var stdOutLine:String = "";
       var stdErrLine:String = "";
-      while (p.isRunning) {
+      while (p.isRunning()) {
          stdErrLine = p.stderr.previewLine(50 /*ms*/);
          if (stdErrLine.contains("\n"))
             break;

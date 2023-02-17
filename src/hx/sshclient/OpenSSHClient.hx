@@ -89,7 +89,7 @@ class OpenSSHClient extends SSHClient {
       /*
        * execute command via openssh
        */
-      return new BackgroundProcess(executable.toString(), args);
+      return BackgroundProcess.create(executable.toString(), args);
    }
 
 
