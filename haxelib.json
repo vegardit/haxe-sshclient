@@ -11,7 +11,7 @@
    "description": "A basic SSH client library using an pre-installed SSH client (OpenSSH, Putty, or Kitty) under the hood.",
    "contributors": ["vegardit"],
    "releasenote": "See https://github.com/vegardit/haxe-sshclient/blob/master/CHANGELOG.md",
-   "version": "0.1.0",
+   "version": "0.1.1",
    "dependencies": {
       "haxe-concurrent":"",
       "haxe-files":"",
