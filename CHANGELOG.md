@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- "Null safety: Cannot pass nullable value to not-nullable argument" with Haxe 4.3
+
+
 ## [0.1.0] - 2023-02-17
 
 ### Added

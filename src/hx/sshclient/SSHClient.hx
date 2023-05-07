@@ -34,13 +34,15 @@ abstract class SSHClient {
    public var compression(default, null):Bool = false;
 
 
-   function new() {
+   inline function new() {
    }
+
 
    public abstract function execute(cmd:String):BackgroundProcess;
 
 
    public function toString():String {
+      @:nullSafety(Off)
       return '${Type.getClassName(Type.getClass(this))}[${username}@${hostname}:${port},Secret(${secret.getName()})]';
    }
 }
@@ -57,6 +59,7 @@ class SSHClientBuilder<T:SSHClient, This:SSHClientBuilder<T, This>> {
 
    inline function new() {
    }
+
 
    public function build():T {
       if (clientBuilt)
