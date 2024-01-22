@@ -84,18 +84,9 @@ jobs:
     - name: "Linux: Configure fast APT mirror"
       uses: vegardit/fast-apt-mirror.sh@v1
 
-    - name: 'MacOS: Load Homebrew Docker cache'
-      # https://github.com/docker-practice/actions-setup-docker/issues/21
-      uses: actions/cache@v3
-      if: runner.os == 'macOS'
-      with:
-        path: |
-          ~/Library/Caches/Homebrew/downloads/*-Docker.dmg
-        key: brew-actions-setup-docker
-
     - name: "MacOS: Install docker"
       if: runner.os == 'macOS'
-      uses: docker-practice/actions-setup-docker@master
+      uses: douglascamata/setup-docker-macos-action@main
       timeout-minutes: 15
 
     - name: "Install: Putty plink"
