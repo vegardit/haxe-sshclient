@@ -19,7 +19,7 @@ final class Macros {
          throw 'ERROR: Haxe 4.2 or higher is required!';
       #end
       final def = Context.getDefines();
-      final supportedTargets = ["cpp", "cs", "hl", "java", "neko", "python"];
+      final supportedTargets = ["cpp", "cs", "hl", "java", "jvm", "neko", "python"];
       final targetName = def.get("target.name");
       if (!supportedTargets.contains(targetName)) {
          throw 'ERROR: Unsupported Haxe target [${targetName}]! Supported are ${supportedTargets}';
