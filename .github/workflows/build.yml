@@ -180,8 +180,10 @@ jobs:
     # Run Haxe Tests
     ##################################################
     - name: Test with Haxe
-      uses: vegardit/haxe-reusable-workflows/.github/actions/test-with-haxe@v1
+      uses: vegardit/haxe-reusable-workflows/.github/actions/test-with-haxe@dev
       with:
+        haxe-reusable-workflows-version: dev
+
         haxe-version: ${{ matrix.haxe }}
         haxe-libs: haxe-concurrent haxe-doctest haxe-files haxe-strings hx3compat
 
