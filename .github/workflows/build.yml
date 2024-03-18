@@ -61,13 +61,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: 
+        os:
         - ubuntu-latest
         - macos-latest
         - windows-latest
         haxe:
         - nightly
-        - 4.3.2
+        - 4.3.4
         - 4.2.5
 
     steps:
@@ -187,12 +187,14 @@ jobs:
 
         # Haxe targets to test with, by default all are set to false:
         test-cpp:    true
-        test-cs:     true
+        test-cs:     ${{ (inputs.test-target == '' || inputs.test-target == 'cs') && matrix.haxe != 'nightly'}}  # Haxe 5 drops C# Support
         test-hl:     true
-        test-java:   true
+        test-java:   ${{ (inputs.test-target == '' || inputs.test-target == 'java') && matrix.haxe != 'nightly' }} # Haxe 5 drops Java Support
         test-jvm:    true
         test-neko:   true
         test-python: true
+
+        allow-failure: ${{ matrix.haxe == 'nightly' }}
 
         # provide SSH access to the GitHub runner for manual debugging purposes
         debug-with-ssh: ${{ inputs.debug-with-ssh || 'never' }}
