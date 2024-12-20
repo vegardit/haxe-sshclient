@@ -2,14 +2,16 @@
 # SPDX-FileContributor: Sebastian Thomschke, Vegard IT GmbH
 # SPDX-License-Identifier: Apache-2.0
 #
-# https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
 name: Build
 
 on:
+  schedule:
+    - cron: '0 15 1 * *'
   push:
-    branches:
-    - '**'
-    tags-ignore:
+    branches-ignore:  # build all branches except:
+    - 'dependabot/**'  # prevent GHA triggered twice (once for commit to the branch and once for opening/syncing the PR)
+    tags-ignore:  # don't build tags
     - '**'
     paths-ignore:
     - '**/*.adoc'
@@ -17,13 +19,22 @@ on:
     - '.editorconfig'
     - '.git*'
     - '.github/*.yml'
+    - '.github/workflows/stale.yml'
     - 'tools'
   pull_request:
+    paths-ignore:
+    - '**/*.adoc'
+    - '**/*.md'
+    - '.editorconfig'
+    - '.git*'
+    - '.github/*.yml'
+    - '.github/workflows/stale.yml'
+    - 'tools'
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
     inputs:
       debug-with-ssh:
-        description: "Start an SSH session for debugging purposes after tests ran:"
+        description: "Start an SSH session for debugging purposes at the end of the build:"
         default: never
         type: choice
         options: [ always, on_failure, on_failure_or_cancelled, never ]
@@ -41,9 +52,11 @@ on:
         type: choice
         options: [ "", cpp, cs, eval, flash, hl, java, jvm, lua, neko, node, php, python ]
 
+
 defaults:
   run:
     shell: bash
+
 
 env:
   # these env variables are also used by TestRunner.hx
@@ -54,6 +67,8 @@ env:
   TEST_SSH_PEMKEY_FILE: test/id_key.txt
   TEST_SSH_PPKKEY_FILE: test/id_key.ppk
   TEST_SSH_PUBKEY_FILE: test/id_pub.txt
+  JAVA_VERSION: 21
+
 
 jobs:
   build:
@@ -61,14 +76,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
+        os:  # https://github.com/actions/runner-images#available-images
         - ubuntu-latest
-        - macos-latest
+        - macos-13 # Intel
+        - macos-latest # ARM
         - windows-latest
         haxe:
         - nightly
         - 4.3.6
         - 4.2.5
+        exclude:
+        - os: macos-latest # ARM
+          haxe: 4.2.5
 
     steps:
     - name: Show environment variables
@@ -82,12 +101,8 @@ jobs:
     # Install software
     ##################################################
     - name: "Linux: Configure fast APT mirror"
+      if: runner.os == 'Linux'
       uses: vegardit/fast-apt-mirror.sh@v1
-
-    - name: "MacOS: Install docker"
-      if: runner.os == 'macOS'
-      uses: douglascamata/setup-docker-macos-action@main
-      timeout-minutes: 15
 
     - name: "Install: Putty plink"
       run: |
@@ -104,74 +119,139 @@ jobs:
             ;;
         esac
 
+    - name: "Install: JDK ${{ env.JAVA_VERSION }} ☕"
+      uses: actions/setup-java@v4  # https://github.com/actions/setup-java
+      with:
+        distribution: temurin
+        java-version: ${{ env.JAVA_VERSION }}
+
+    - name: "Install: Maven"
+      uses: stCarolas/setup-maven@v5  # https://github.com/stCarolas/setup-maven
+      with:
+        maven-version: 3.9.9
+
 
     ##################################################
-    # Run local SSH server
+    # Build and run local SSH server
     ##################################################
-    - name: "Create Windows testuser for SSH"
-      if: runner.os == 'Windows'
-      shell: cmd
-      run: net user /ADD ${{ env.TEST_SSH_USER }} ${{ env.TEST_SSH_PW }}
-
     - name: "Start local test SSH server"
       run: |
-        set -euxo pipefail
+        set -euox pipefail
 
         chmod 400 test/id_*
 
+        # Create a folder for dependencies and download Apache Mina SSHD library
+        mkdir -p test/sshd/src/main/java
+        mkdir -p test/sshd/src/main/resources
+
+        pushd test/sshd
+
+        cat << 'EOF' >pom.xml
+        <project xmlns="http://maven.apache.org/POM/4.0.0">
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>test</groupId>
+          <artifactId>sshd</artifactId>
+          <version>1.0-SNAPSHOT</version>
+          <properties>
+            <sshd.version>2.14.0</sshd.version>
+            <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+            <maven.compiler.source>21</maven.compiler.source>
+            <maven.compiler.target>21</maven.compiler.target>
+          </properties>       
+          <dependencyManagement>
+            <dependencies>
+              <dependency>
+                <groupId>org.apache.sshd</groupId>
+                <artifactId>sshd-core</artifactId>
+                <version>${sshd.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+              </dependency>
+            </dependencies>
+          </dependencyManagement>
+          <dependencies>
+            <dependency>
+              <groupId>org.apache.sshd</groupId>
+              <artifactId>sshd-core</artifactId>
+              <version>${sshd.version}</version>
+            </dependency>
+            <dependency>
+              <groupId>org.slf4j</groupId>
+              <artifactId>slf4j-simple</artifactId>
+            </dependency>
+            <dependency>
+              <groupId>org.bouncycastle</groupId>
+              <artifactId>bcpkix-jdk18on</artifactId>
+            </dependency>
+          </dependencies>
+        </project>
+        EOF
+
+        # Write the Java SSH server code
+        cat << 'EOF' >src/main/java/TestSshServer.java
+        import org.apache.sshd.common.config.keys.KeyUtils;
+        public class TestSshServer {
+          public static void main(String[] args) throws Exception {
+            java.security.Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+            var sshd = org.apache.sshd.server.SshServer.setUpDefaultServer();
+            sshd.setCommandFactory((channel, command) -> {
+              if ("whoami".equals(command))
+                return new org.apache.sshd.server.command.AbstractCommandSupport(command, null) {
+                  @Override
+                  public void run() {
+                    try {
+                      getOutputStream().write("${{ env.TEST_SSH_USER}}\n".getBytes());
+                      getOutputStream().close();
+                    } catch (final java.io.IOException e) {
+                      // ignored
+                    }
+                    if (getExitCallback() != null) {
+                      getExitCallback().onExit(0);
+                    }
+                  }
+                };
+              return new org.apache.sshd.server.shell.UnknownCommand(command);
+            });
+            sshd.setHost("${{ env.TEST_SSH_HOST}}");
+            sshd.setPort(${{ env.TEST_SSH_PORT }});
+            sshd.setKeyPairProvider(new org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider());
+            sshd.setPasswordAuthenticator((usr, pw, sess) 
+              -> "${{ env.TEST_SSH_USER}}".equals(usr) && "${{ env.TEST_SSH_PW}}".equals(pw));
+            final var authorizedKey = KeyUtils.loadPublicKey(java.nio.file.Paths.get("../../${{ env.TEST_SSH_PUBKEY_FILE}}"));
+            sshd.setPublickeyAuthenticator((usr, key, sess) 
+              -> "${{ env.TEST_SSH_USER}}".equals(usr) && KeyUtils.compareKeys(key, authorizedKey));
+            sshd.start();
+            System.out.println("SSH server is running on port ${{ env.TEST_SSH_PORT }}...");
+            Thread.sleep(Long.MAX_VALUE); // Keep the server running
+          }
+        }
+        EOF
+        mvn -B -ntp compile 
+        nohup mvn -B -ntp org.codehaus.mojo:exec-maven-plugin:3.5.0:java -Dexec.mainClass=TestSshServer >/tmp/sshd.log 2>&1 &
+
+        popd
+
         case "${{ runner.os }}" in
           Windows)
-            # prevents setgid: Invalid argument
-            mkpasswd -l | tee /etc/passwd
-            mkgroup -l > /etc/group
-
-            /usr/bin/ssh-keygen -vA # generate host keys for sshd
-
-            cat <<EOF > /etc/ssh/sshd_config
-        ListenAddress $TEST_SSH_HOST
-        Port $TEST_SSH_PORT
-        PermitRootLogin no
-        StrictModes no
-        PubkeyAuthentication yes
-        IgnoreUserKnownHosts yes
-        PasswordAuthentication yes
-        PermitEmptyPasswords no
-        LogLevel DEBUG3
-        match User $TEST_SSH_USER
-          AuthorizedKeysFile $(pwd)/$TEST_SSH_PUBKEY_FILE
-        EOF
-            /usr/bin/sshd -T # test config
-
-            # install PsExec to run sshd as SYSTEM without having to configure it as a system service
-            curl -sSfL -o PSTools.zip http://download.sysinternals.com/files/PSTools.zip
-            unzip PSTools.zip PsExec64.exe
-
-            # launch sshd in background as SYSTEM to prevent "/usr/bin/bash: Operation not permitted"
-            ./PsExec64 -accepteula -d -s "$(cygpath -w /usr/bin/sshd)" -E /tmp/sshd.log &
-            sleep 5
-
             # TODO for some reason on GitHub Actions under Windows accepting new host keys doesn't work 
             # when plink/klink is executed via the PuttySSHClient class, so for now we accept
             # the key before the Windows tests run
-            klink -auto-store-sshkey \
-              -P $TEST_SSH_PORT \
-              -pw $TEST_SSH_PW \
-              $TEST_SSH_USER@$TEST_SSH_HOST \
-              "whoami"
-            ;;
-
-          *)
-            touch /tmp/sshd.log
-            docker run -d --rm \
-              --name "openssh-server" \
-              -e PASSWORD_ACCESS=true \
-              -e USER_NAME=$TEST_SSH_USER \
-              -e USER_PASSWORD=$TEST_SSH_PW \
-              -e PUBLIC_KEY_FILE=/config/id_pub.txt \
-              -p $TEST_SSH_PORT:2222 \
-              --volume $(pwd)/$TEST_SSH_PUBKEY_FILE:/config/id_pub.txt:ro \
-              --volume /tmp/sshd.log:/config/logs/openssh/current:rw \
-              lscr.io/linuxserver/openssh-server:latest
+            success=0
+            for i in {1..5}; do
+              sleep 1
+              if klink -auto-store-sshkey -ssh -batch -v \
+                -P "$TEST_SSH_PORT" \
+                -pw "$TEST_SSH_PW" \
+                "$TEST_SSH_USER@$TEST_SSH_HOST" \
+                "whoami"; then
+                  success=1
+                  break
+               fi
+            done
+            if [ $success -eq 0 ]; then
+              echo "Cannot contact SSH server." >&2
+              exit 1
+            fi
             ;;
         esac
 
@@ -207,11 +287,6 @@ jobs:
     ##################################################
     # Dipslay logs
     ##################################################
-    - name: Shutdown SSHD and display logs
+    - name: Display SSHD logs
       if: always()
-      run: |
-        case "${{runner.os}}" in
-          Windows) ;;
-          *)       docker container rm openssh-server --force || true ;;
-        esac
-        cat /tmp/sshd.log || true
+      run: cat /tmp/sshd.log || true
